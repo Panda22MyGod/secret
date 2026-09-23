@@ -1,3 +1,25 @@
+local sm11coil = true
+local sm11spread = true
+
+oldhook = hookfunction(setmetatable, newcclosure(function(tbl, mt)
+    if typeof(mt) == "table" and rawget(mt, "__index") then
+        local index = mt.__index
+        if sm11coil and type(index) == "table" and not checkcaller() then
+            if rawget(index, "HipRecoil") then
+                index.HipRecoil.cameraX, index.HipRecoil.cameraY, index.HipRecoil.push = 0, 0, 0
+            end
+            if rawget(index, "AimRecoil") then
+                index.AimRecoil.cameraX, index.AimRecoil.cameraY, index.AimRecoil.push = 0, 0, 0
+            end
+        end
+        if sm11spread and type(index) == "table" and not checkcaller() then
+            index.Accuracy = -9e9
+        end
+    end
+    return oldhook(tbl, mt)
+end))
+
+
 local type_custom = typeof
 if not LPH_OBFUSCATED then
     LPH_JIT = function(...)
