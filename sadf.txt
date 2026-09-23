@@ -337,6 +337,9 @@ repeat
     end
 until trident.middlepart and trident.original_model and trident.tcp
 
+-- ============================================================
+--  ESP LIBRARY (с corner режимом)
+-- ============================================================
 cheat.EspLibrary = {}; LPH_NO_VIRTUALIZE(function()
     local esp_table = {}
     local workspace = cloneref(game:GetService("Workspace"))
@@ -344,6 +347,7 @@ cheat.EspLibrary = {}; LPH_NO_VIRTUALIZE(function()
     local plrs = cloneref(game:GetService("Players"))
     local lplr = plrs.LocalPlayer
     local container = Instance.new("Folder", game:GetService("CoreGui").RobloxGui)
+
     esp_table = {
         __loaded = false,
         main_settings = {
@@ -415,6 +419,17 @@ cheat.EspLibrary = {}; LPH_NO_VIRTUALIZE(function()
             }
         }
     }
+
+    -- CORNER SETTINGS — добавляются ПОСЛЕ создания esp_table
+    esp_table.corner_settings = {
+        mode = "Box",                   -- "Box" / "Corner"
+        corner_len_percent = 0.20,
+        corner_min_len = 4,
+        outline = true,
+        outline_color = Color3.new(0, 0, 0),
+        outline_thickness_extra = 2,
+    }
+
     local loaded_plrs = {}
     local camera = workspace.CurrentCamera
 
@@ -579,6 +594,101 @@ cheat.EspLibrary = {}; LPH_NO_VIRTUALIZE(function()
         return result
     end
 
+    -- ============================================
+    --  CORNER DRAW HELPERS
+    -- ============================================
+    local function create_corner_lines(obj_table, prefix)
+        obj_table[prefix .. "_outline"] = {}
+        for i = 1, 8 do
+            obj_table[prefix .. "_outline"][i] = esp.create_obj("Line", {
+                Visible = false,
+                Thickness = 3,
+                Color = Color3.new(0, 0, 0),
+                ZIndex = 0,
+            })
+        end
+        obj_table[prefix] = {}
+        for i = 1, 8 do
+            obj_table[prefix][i] = esp.create_obj("Line", {
+                Visible = false,
+                Thickness = 1,
+                Color = Color3.new(1, 1, 1),
+                ZIndex = 1,
+            })
+        end
+    end
+
+    local function set_corner_visible(obj_table, prefix, visible)
+        if obj_table[prefix] then
+            for i = 1, 8 do
+                if obj_table[prefix][i] then obj_table[prefix][i].Visible = visible end
+            end
+        end
+        if obj_table[prefix .. "_outline"] then
+            for i = 1, 8 do
+                if obj_table[prefix .. "_outline"][i] then obj_table[prefix .. "_outline"][i].Visible = visible end
+            end
+        end
+    end
+
+    local function set_corner_remove(obj_table, prefix)
+        if obj_table[prefix] then
+            for i = 1, 8 do
+                if obj_table[prefix][i] then obj_table[prefix][i]:Remove() end
+            end
+        end
+        if obj_table[prefix .. "_outline"] then
+            for i = 1, 8 do
+                if obj_table[prefix .. "_outline"][i] then obj_table[prefix .. "_outline"][i]:Remove() end
+            end
+        end
+    end
+
+    local function draw_corners(obj_table, prefix, x, y, w, h, color, outline_enabled, outline_color, len_percent, min_len, thickness_extra)
+        local lenX = math.max(w * len_percent, min_len)
+        local lenY = math.max(h * len_percent, min_len)
+        lenX = math.min(lenX, w * 0.45)
+        lenY = math.min(lenY, h * 0.45)
+
+        local right = x + w
+        local bottom = y + h
+
+        local segments = {
+            { _Vector2new(x, y),           _Vector2new(x + lenX, y) },
+            { _Vector2new(x, y),           _Vector2new(x, y + lenY) },
+            { _Vector2new(right, y),       _Vector2new(right - lenX, y) },
+            { _Vector2new(right, y),       _Vector2new(right, y + lenY) },
+            { _Vector2new(x, bottom),      _Vector2new(x + lenX, bottom) },
+            { _Vector2new(x, bottom),      _Vector2new(x, bottom - lenY) },
+            { _Vector2new(right, bottom),  _Vector2new(right - lenX, bottom) },
+            { _Vector2new(right, bottom),  _Vector2new(right, bottom - lenY) },
+        }
+
+        for i = 1, 8 do
+            local seg = segments[i]
+
+            if outline_enabled and obj_table[prefix .. "_outline"] and obj_table[prefix .. "_outline"][i] then
+                local ol = obj_table[prefix .. "_outline"][i]
+                ol.From = seg[1]
+                ol.To = seg[2]
+                ol.Color = outline_color
+                ol.Thickness = 1 + thickness_extra
+                ol.Visible = true
+            elseif obj_table[prefix .. "_outline"] and obj_table[prefix .. "_outline"][i] then
+                obj_table[prefix .. "_outline"][i].Visible = false
+            end
+
+            if obj_table[prefix] and obj_table[prefix][i] then
+                local ml = obj_table[prefix][i]
+                ml.From = seg[1]
+                ml.To = seg[2]
+                ml.Color = color
+                ml.Thickness = 1
+                ml.Visible = true
+            end
+        end
+    end
+
     local function create_esp(model)
         if model and _FindFirstChild(model, "Head") and _FindFirstChild(model, "LowerTorso") then
             local settings = esp_table.settings.enemy
@@ -599,6 +709,9 @@ cheat.EspLibrary = {}; LPH_NO_VIRTUALIZE(function()
                 },
                 chams_object = Instance.new("Highlight", container),
             }
+
+            create_corner_lines(loaded_plrs[model].obj, "corner")
+
             for required, _ in next, skeleton_order do
                 loaded_plrs[model].obj["skeleton_" .. required] = esp.create_obj("Line", { Visible = false })
             end
@@ -627,7 +740,7 @@ cheat.EspLibrary = {}; LPH_NO_VIRTUALIZE(function()
                 main_settings = deepcopy(esp_table.main_settings)
                 settings      = deepcopy(esp_table.settings.enemy)
 
-                cham.DepthMode = settings.chams_visible_only and Enum.HighlightDepthMode.Occluded or not settings.chams_visible_only and Enum.HighlightDepthMode.AlwaysOnTop
+                cham.DepthMode = settings.chams_visible_only and Enum.HighlightDepthMode.Occluded or Enum.HighlightDepthMode.AlwaysOnTop
                 cham.FillColor = settings.chams_fill_color[1]
                 cham.FillTransparency = settings.chams_fill_color[2]
                 cham.OutlineColor = settings.chamsoutline_color[1]
@@ -683,7 +796,17 @@ cheat.EspLibrary = {}; LPH_NO_VIRTUALIZE(function()
                 if setvis_cache ~= bool then
                     setvis_cache = bool
                     if not bool then
-                        for _, v in obj do v.Visible = false end
+                        for k, v in pairs(obj) do
+                            if type(v) == "table" then
+                                for _, sub in ipairs(v) do
+                                    if typeof(sub) ~= "table" and sub.Visible ~= nil then
+                                        sub.Visible = false
+                                    end
+                                end
+                            elseif typeof(v) ~= "table" and v.Visible ~= nil then
+                                v.Visible = false
+                            end
+                        end
                     else
                         cham.Enabled = settings.chams
                         box.Visible = settings.box
@@ -746,15 +869,47 @@ cheat.EspLibrary = {}; LPH_NO_VIRTUALIZE(function()
 
                 cham.Adornee = character
 
-                do
-                    local pos  = corners.topLeft
-                    local size = corners.bottomRight - corners.topLeft
-                    box.Position = pos
-                    box.Size = size
-                    box_outline.Position = pos + Vector2.one
-                    box_outline.Size = size - Vector2.one
+                local pos  = corners.topLeft
+                local size = corners.bottomRight - corners.topLeft
+                local w, h = size.X, size.Y
+                local x, y = pos.X, pos.Y
+
+                local cs = esp_table.corner_settings or { mode = "Box", outline = false, outline_color = Color3.new(0,0,0), corner_len_percent = 0.2, corner_min_len = 4, outline_thickness_extra = 2 }
+                local use_corner = (cs.mode == "Corner")
+
+                if use_corner then
+                    box.Visible = false
+                    box_outline.Visible = false
+
                     box_fill.Position = pos
                     box_fill.Size = size
+                    box_fill.Visible = settings.box_fill
+
+                    draw_corners(
+                        obj, "corner",
+                        x, y, w, h,
+                        settings.box_color[1],
+                        cs.outline,
+                        cs.outline_color,
+                        cs.corner_len_percent,
+                        cs.corner_min_len,
+                        cs.outline_thickness_extra
+                    )
+                    set_corner_visible(obj, "corner", true)
+                else
+                    set_corner_visible(obj, "corner", false)
+
+                    box.Position = pos
+                    box.Size = size
+                    box.Visible = settings.box
+
+                    box_outline.Position = pos + Vector2.one
+                    box_outline.Size = size - Vector2.one
+                    box_outline.Visible = settings.box_outline
+
+                    box_fill.Position = pos
+                    box_fill.Size = size
+                    box_fill.Visible = settings.box_fill
                 end
 
                 do
@@ -849,7 +1004,13 @@ cheat.EspLibrary = {}; LPH_NO_VIRTUALIZE(function()
         if not plr_object then return end
         plr_object.connection:Disconnect()
         for i, v in plr_object.obj do
-            v:Remove()
+            if type(v) == "table" then
+                for _, sub in ipairs(v) do
+                    if typeof(sub) ~= "table" then sub:Remove() end
+                end
+            elseif typeof(v) ~= "table" then
+                v:Remove()
+            end
         end
         if plr_object.chams_object then
             plr_object.chams_object:Destroy()
@@ -1074,6 +1235,53 @@ do
             cheat.EspLibrary.icaca()
         end
     })
+
+    espb:AddDropdown('espboxmode', {
+        Values = { 'Box', 'Corner' },
+        Default = 1,
+        Multi = false,
+        Text = 'box mode',
+        Tooltip = 'Box = full rectangle; Corner = brackets',
+        Callback = function(Value)
+            cheat.EspLibrary.corner_settings.mode = Value
+        end
+    })
+    espb:AddSlider('espcornerlen', {
+        Text = 'corner length (%)',
+        Default = 20,
+        Min = 5,
+        Max = 50,
+        Rounding = 0,
+        Suffix = '%',
+        Compact = false
+    }):OnChanged(function(State)
+        cheat.EspLibrary.corner_settings.corner_len_percent = State / 100
+    end)
+    espb:AddToggle('espcorneroutline', {
+        Text = 'corner outline',
+        Default = true,
+        Callback = function(first)
+            cheat.EspLibrary.corner_settings.outline = first
+        end
+    }):AddColorPicker('espcorneroutlinecolor', {
+        Default = Color3.new(0, 0, 0),
+        Title = 'corner outline color',
+        Transparency = 0,
+        Callback = function(Value)
+            cheat.EspLibrary.corner_settings.outline_color = Value
+        end
+    })
+    espb:AddSlider('espcorneroutlineextra', {
+        Text = 'outline extra thickness',
+        Default = 2,
+        Min = 0,
+        Max = 6,
+        Rounding = 0,
+        Compact = false
+    }):OnChanged(function(State)
+        cheat.EspLibrary.corner_settings.outline_thickness_extra = State
+    end)
+
     espb:AddToggle('espbox', {
         Text = 'box esp',
         Default = false,
